@@ -45,22 +45,6 @@
       overscroll-behavior-y: contain;
     }
 
-    /* PWA standalone: safe area para notch/isla dinámica */
-    @supports (padding-top: env(safe-area-inset-top)) {
-      header {
-        padding-top: calc(1.5rem + env(safe-area-inset-top));
-        padding-left: calc(2rem + env(safe-area-inset-left));
-        padding-right: calc(2rem + env(safe-area-inset-right));
-      }
-    }
-
-    /* Modo standalone (instalada como app): margen extra superior */
-    @media (display-mode: standalone) {
-      header {
-        padding-top: calc(1cm + env(safe-area-inset-top, 0px));
-      }
-    }
-
     header {
       background: var(--azul);
       color: white;
@@ -518,6 +502,15 @@
       .detail-grid { grid-template-columns: 1fr; }
       .foto-med { float: none; margin: 0 auto 1rem; display: block; }
       .filters-actions { flex-wrap: wrap; }
+    }
+
+    /* ── PWA standalone: desplazar header para que no lo tape la barra de estado ── */
+    @media all and (display-mode: standalone) {
+      header {
+        padding-top: calc(1cm + env(safe-area-inset-top, 0px)) !important;
+        padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+        padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+      }
     }
 
     /* ── Banner offline ── */
