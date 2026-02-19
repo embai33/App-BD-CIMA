@@ -48,9 +48,16 @@
     /* PWA standalone: safe area para notch/isla dinámica */
     @supports (padding-top: env(safe-area-inset-top)) {
       header {
-        padding-top: calc(1rem + env(safe-area-inset-top));
+        padding-top: calc(1.5rem + env(safe-area-inset-top));
         padding-left: calc(2rem + env(safe-area-inset-left));
         padding-right: calc(2rem + env(safe-area-inset-right));
+      }
+    }
+
+    /* Modo standalone (instalada como app): margen extra superior */
+    @media (display-mode: standalone) {
+      header {
+        padding-top: calc(1cm + env(safe-area-inset-top, 0px));
       }
     }
 
