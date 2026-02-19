@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>CIMA - Consulta de Medicamentos</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a5276">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CIMA">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <!-- Descripcion -->
+  <meta name="description" content="Consulta de medicamentos autorizados en España — Datos de la AEMPS">
+  <style>
+    :root {
+      --azul: #1a5276;
+      --azul-claro: #2980b9;
+      --gris-fondo: #f4f6f9;
+      --gris-borde: #dce1e8;
+      --blanco: #ffffff;
+      --texto: #2c3e50;
+      --texto-sec: #5d6d7e;
+      --verde: #27ae60;
+      --rojo: #c0392b;
+      --naranja: #e67e22;
+      --radius: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--gris-fondo);
+      color: var(--texto);
+      line-height: 1.5;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+      overscroll-behavior-y: contain;
+    }
+
+    /* PWA standalone: safe area para notch/isla dinámica */
+    @supports (padding-top: env(safe-area-inset-top)) {
+      header {
+        padding-top: calc(1rem + env(safe-area-inset-top));
+        padding-left: calc(2rem + env(safe-area-inset-left));
+        padding-right: calc(2rem + env(safe-area-inset-right));
+      }
+    }
+
+    header {
+      background: var(--azul);
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    header h1 { font-size: 1.4rem; font-weight: 600; }
+    header span { font-size: 0.85rem; opacity: 0.8; }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    /* ── Panel de filtros ── */
+    .filters-box {
+      background: var(--blanco);
+      padding: 1.5rem;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 1.5rem;
+    }
+
+    .filters-box h2 {
+      font-size: 1.1rem;
+      margin-bottom: 1.2rem;
+      color: var(--azul);
+    }
+
+    .filters-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem 1.5rem;
+    }
+
+    .filter-group label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--texto-sec);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 0.25rem;
+      font-weight: 600;
+    }
+
+    .filter-group input,
+    .filter-group select {
+      width: 100%;
+      padding: 0.5rem 0.65rem;
+      border: 1px solid var(--gris-borde);
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      background: var(--blanco);
+    }
+
+    .filter-group input:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: var(--azul-claro);
+      box-shadow: 0 0 0 3px rgba(41,128,185,0.15);
+    }
+
+    .filters-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.2rem;
+      align-items: center;
+    }
+
+    .filters-actions-left {
+      display: flex;
+      gap: 0.75rem;
+      flex: 1;
+    }
+
+    /* ── Botones ── */
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .btn-primary { background: var(--azul-claro); color: white; }
+    .btn-primary:hover { background: var(--azul); }
+    .btn-secondary { background: var(--gris-borde); color: var(--texto); }
+    .btn-secondary:hover { background: #c5ccd6; }
+
+    .btn-clear {
+      background: none;
+      border: none;
+      color: var(--texto-sec);
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0.4rem 0.6rem;
+    }
+
+    .btn-clear:hover { color: var(--rojo); }
+
+    /* ── Filtros avanzados (locales) ── */
+    .advanced-toggle {
+      background: none;
+      border: 1px solid var(--gris-borde);
+      color: var(--azul-claro);
+      font-size: 0.85rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .advanced-toggle:hover { border-color: var(--azul-claro); background: #eaf2f8; }
+    .advanced-toggle.active { background: #eaf2f8; border-color: var(--azul-claro); }
+
+    .advanced-panel {
+      display: none;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--gris-borde);
+    }
+
+    .advanced-panel.open { display: block; }
+
+    .advanced-panel .advanced-note {
+      font-size: 0.8rem;
+      color: var(--naranja);
+      margin-bottom: 0.75rem;
+      font-style: italic;
+    }
+
+    /* ── Tags de filtros activos ── */
+    .active-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+    }
+
+    .active-filters:empty { display: none; }
+
+    .filter-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #eaf2f8;
+      color: var(--azul);
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.78rem;
+    }
+
+    .filter-tag .remove {
+      cursor: pointer;
+      font-weight: bold;
+      opacity: 0.6;
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .filter-tag .remove:hover { opacity: 1; color: var(--rojo); }
+
+    /* ── Autocomplete ── */
+    .autocomplete-wrap {
+      position: relative;
+    }
+
+    .autocomplete-wrap input {
+      width: 100%;
+      padding: 0.5rem 0.65rem;
+      border: 1px solid var(--gris-borde);
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      background: var(--blanco);
+    }
+
+    .autocomplete-wrap input:focus {
+      outline: none;
+      border-color: var(--azul-claro);
+      box-shadow: 0 0 0 3px rgba(41,128,185,0.15);
+    }
+
+    .ac-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--blanco);
+      border: 1px solid var(--gris-borde);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      z-index: 100;
+      display: none;
+    }
+
+    .ac-list.open { display: block; }
+
+    .ac-item {
+      padding: 0.45rem 0.65rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      border-bottom: 1px solid var(--gris-fondo);
+    }
+
+    .ac-item:hover, .ac-item.active {
+      background: #eaf2f8;
+      color: var(--azul);
+    }
+
+    .ac-item .ac-code {
+      font-size: 0.75rem;
+      color: var(--texto-sec);
+      margin-right: 0.4rem;
+    }
+
+    .ac-hint {
+      padding: 0.45rem 0.65rem;
+      font-size: 0.8rem;
+      color: var(--texto-sec);
+      font-style: italic;
+    }
+
+    /* ── Resultados ── */
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .results-info {
+      font-size: 0.9rem;
+      color: var(--texto-sec);
+    }
+
+    .btn-export {
+      padding: 0.35rem 0.8rem;
+      border: 1px solid var(--verde);
+      background: var(--blanco);
+      color: var(--verde);
+      border-radius: var(--radius);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-export:hover:not(:disabled) {
+      background: var(--verde);
+      color: white;
+    }
+
+    .btn-export:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .med-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .med-card {
+      background: var(--blanco);
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      cursor: pointer;
+      border-left: 4px solid var(--azul-claro);
+      transition: box-shadow 0.2s, transform 0.1s;
+    }
+
+    .med-card:hover {
+      box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+      transform: translateY(-1px);
+    }
+
+    .med-card h3 { font-size: 1rem; color: var(--azul); margin-bottom: 0.3rem; }
+
+    .med-card .meta-pa {
+      font-size: 0.85rem;
+      color: var(--texto);
+      margin-bottom: 0.3rem;
+      font-weight: 500;
+    }
+
+    .med-card .meta {
+      font-size: 0.85rem;
+      color: var(--texto-sec);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.5rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-green { background: #d5f5e3; color: #1e8449; }
+    .badge-red { background: #fadbd8; color: #922b21; }
+    .badge-orange { background: #fdebd0; color: #b9770e; }
+    .badge-blue { background: #d6eaf8; color: #1a5276; }
+
+    /* ── Paginaci&oacute;n ── */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    /* ── Ficha detallada ── */
+    .detail-panel {
+      background: var(--blanco);
+      border-radius: var(--radius);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      padding: 1.5rem;
+      display: none;
+    }
+
+    .detail-panel.active { display: block; }
+
+    .detail-back {
+      font-size: 0.9rem;
+      color: var(--azul-claro);
+      cursor: pointer;
+      margin-bottom: 1rem;
+      display: inline-block;
+    }
+
+    .detail-back:hover { text-decoration: underline; }
+
+    .detail-panel h2 { font-size: 1.3rem; color: var(--azul); margin-bottom: 1rem; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem 2rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .detail-grid dt {
+      font-size: 0.8rem;
+      color: var(--texto-sec);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .detail-grid dd { font-size: 0.95rem; margin-bottom: 0.5rem; }
+
+    .detail-section {
+      margin-top: 1.2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--gris-borde);
+    }
+
+    .detail-section h3 { font-size: 1rem; color: var(--azul); margin-bottom: 0.6rem; }
+
+    .doc-links a {
+      display: inline-block;
+      margin-right: 1rem;
+      margin-bottom: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      background: var(--gris-fondo);
+      border-radius: var(--radius);
+      color: var(--azul-claro);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
+    .doc-links a:hover { background: var(--gris-borde); }
+
+    table.presentaciones {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    table.presentaciones th {
+      text-align: left;
+      background: var(--gris-fondo);
+      padding: 0.5rem;
+      color: var(--texto-sec);
+      font-weight: 600;
+    }
+
+    table.presentaciones td {
+      padding: 0.5rem;
+      border-bottom: 1px solid var(--gris-borde);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--texto-sec);
+    }
+
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--gris-borde);
+      border-top-color: var(--azul-claro);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      background: #fadbd8;
+      color: #922b21;
+      padding: 0.8rem 1rem;
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--texto-sec);
+    }
+
+    .foto-med {
+      max-width: 180px;
+      border-radius: var(--radius);
+      border: 1px solid var(--gris-borde);
+      float: right;
+      margin: 0 0 1rem 1rem;
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 0.8rem 1rem; }
+      .container { padding: 1rem; }
+      .filters-grid { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .foto-med { float: none; margin: 0 auto 1rem; display: block; }
+      .filters-actions { flex-wrap: wrap; }
+    }
+
+    /* ── Banner offline ── */
+    .offline-banner {
+      display: none;
+      background: var(--naranja);
+      color: white;
+      text-align: center;
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .offline-banner.visible { display: block; }
+
+    /* ── PWA install prompt ── */
+    .install-banner {
+      display: none;
+      background: var(--azul);
+      color: white;
+      padding: 0.75rem 1rem;
+      text-align: center;
+      font-size: 0.9rem;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .install-banner.visible { display: flex; }
+
+    .install-banner button {
+      background: white;
+      color: var(--azul);
+      border: none;
+      padding: 0.4rem 1rem;
+      border-radius: var(--radius);
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .install-banner .dismiss {
+      background: none;
+      color: rgba(255,255,255,0.7);
+      font-size: 1.2rem;
+      padding: 0.2rem 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Banner offline -->
+<div class="offline-banner" id="offlineBanner">Sin conexión — Las búsquedas requieren Internet</div>
+
+<!-- Banner de instalación -->
+<div class="install-banner" id="installBanner">
+  <span>Instalar CIMA como app</span>
+  <button id="btnInstall">Instalar</button>
+  <button class="dismiss" id="btnDismissInstall">&times;</button>
+</div>
+
+<header>
+  <h1>CIMA Medicamentos</h1>
+  <span>Consulta de medicamentos &middot; Datos de la AEMPS</span>
+</header>
+
+<div class="container">
+
+  <!-- ══ Panel de filtros principal ══ -->
+  <div class="filters-box">
+    <h2>Buscar medicamentos</h2>
+
+    <div class="filters-grid">
+
+      <!-- Identificación -->
+      <div class="filter-group">
+        <label>Principio activo</label>
+        <input type="text" id="fPractiv" placeholder="Ej: ibuprofeno, paracetamol...">
+      </div>
+
+      <div class="filter-group">
+        <label>Nombre del medicamento</label>
+        <input type="text" id="fNombre" placeholder="Ej: Nolotil, Adiro...">
+      </div>
+
+      <div class="filter-group">
+        <label>C&oacute;digo Nacional</label>
+        <input type="text" id="fCn" placeholder="Ej: 654321">
+      </div>
+
+      <!-- Clasificación -->
+      <div class="filter-group">
+        <label>Laboratorio titular</label>
+        <div class="autocomplete-wrap" id="acLaboratorio">
+          <input type="text" id="fLaboratorio" placeholder="Escribe para buscar..." autocomplete="off">
+          <div class="ac-list"></div>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Clasificaci&oacute;n ATC</label>
+        <div class="autocomplete-wrap" id="acAtc">
+          <input type="text" id="fAtc" placeholder="C&oacute;digo o nombre..." autocomplete="off">
+          <div class="ac-list"></div>
+        </div>
+      </div>
+
+      <!-- Estado y regulación -->
+      <div class="filter-group">
+        <label>Estado</label>
+        <select id="fEstado">
+          <option value="">Todos</option>
+          <option value="1">Autorizado</option>
+          <option value="4">Suspendido</option>
+          <option value="3">Revocado</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Comercializado</label>
+        <select id="fComerc">
+          <option value="">Todos</option>
+          <option value="1">S&iacute;</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Receta</label>
+        <select id="fReceta">
+          <option value="">Todos</option>
+          <option value="1">S&iacute;</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+
+      <!-- Tipo de medicamento -->
+      <div class="filter-group">
+        <label>Gen&eacute;rico</label>
+        <select id="fGenerico">
+          <option value="">Todos</option>
+          <option value="1">S&iacute;</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Hu&eacute;rfano</label>
+        <select id="fHuerfano">
+          <option value="">Todos</option>
+          <option value="1">S&iacute;</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Biosimilar</label>
+        <select id="fBiosimilar">
+          <option value="">Todos</option>
+          <option value="1">S&iacute;</option>
+          <option value="0">No</option>
+        </select>
+      </div>
+
+      <!-- Control especial -->
+      <div class="filter-group">
+        <label>No sustituible</label>
+        <select id="fSust">
+          <option value="">Todos</option>
+          <option value="1">Biol&oacute;gicos</option>
+          <option value="2">Margen terap&eacute;utico estrecho</option>
+          <option value="3">Control m&eacute;dico especial</option>
+          <option value="4">Inhaladores</option>
+          <option value="5">MTE con control especial</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Estupefaciente</label>
+        <select id="fEstupefaciente">
+          <option value="">Todos</option>
+          <option value="1">S&iacute;</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Psic&oacute;tropo</label>
+        <select id="fPsicotropo">
+          <option value="">Todos</option>
+          <option value="1">S&iacute;</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- Acciones -->
+    <div class="filters-actions">
+      <div class="filters-actions-left">
+        <button class="btn btn-primary" id="btnBuscar">Buscar</button>
+        <button class="btn-clear" id="btnClearFilters">Limpiar filtros</button>
+      </div>
+      <button class="advanced-toggle" id="btnAdvanced">Filtros avanzados &#9660;</button>
+    </div>
+
+    <!-- ── Filtros avanzados (locales) ── -->
+    <div class="advanced-panel" id="advancedPanel">
+      <p class="advanced-note">Estos filtros se aplican sobre los resultados de cada p&aacute;gina ya que la API de CIMA no los soporta como par&aacute;metros de b&uacute;squeda.</p>
+      <div class="filters-grid">
+
+        <div class="filter-group">
+          <label>Comercializador</label>
+          <input type="text" id="fComercializador" placeholder="Ej: Normon...">
+        </div>
+
+        <div class="filter-group">
+          <label>Forma farmac&eacute;utica</label>
+          <input type="text" id="fForma" placeholder="Ej: comprimido, c&aacute;psula...">
+        </div>
+
+        <div class="filter-group">
+          <label>V&iacute;as de administraci&oacute;n</label>
+          <input type="text" id="fVia" placeholder="Ej: oral, intravenosa...">
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Tags de filtros activos -->
+  <div class="active-filters" id="activeFilters"></div>
+
+  <!-- Error -->
+  <div class="error-msg" id="errorMsg" style="display:none"></div>
+
+  <!-- Cargando -->
+  <div class="loading" id="loading" style="display:none">Buscando medicamentos</div>
+
+  <!-- Listado -->
+  <div id="resultsContainer" style="display:none">
+    <div class="results-header">
+      <div class="results-info" id="resultsInfo"></div>
+      <button class="btn-export" id="btnExport" title="Descargar Excel">&#128229; Excel</button>
+    </div>
+    <div class="med-list" id="medList"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- Estado vac&iacute;o -->
+  <div class="empty-state" id="emptyState">
+    Rellena al menos un filtro y pulsa Buscar para consultar medicamentos.
+  </div>
+
+  <!-- Ficha detallada -->
+  <div class="detail-panel" id="detailPanel">
+    <span class="detail-back" id="detailBack">&larr; Volver a resultados</span>
+    <div id="detailContent"></div>
+  </div>
+
+</div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.mini.min.js"></script>
+<script>
+// ============================================================
+// CONFIGURACI&Oacute;N
+// ============================================================
+const CIMA_BASE = 'https://cima.aemps.es/cima/rest';
+
+// ============================================================
+// API
+// ============================================================
+async function cimaFetch(endpoint, params = {}) {
+  const url = new URL(`${CIMA_BASE}${endpoint}`);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== '' && v !== undefined && v !== null) {
+      url.searchParams.set(k, v);
+    }
+  }
+  const res = await fetch(url.toString(), {
+    headers: { 'Accept': 'application/json' }
+  });
+  if (res.status === 204) return { resultados: [] }; // sin contenido
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  return res.json();
+}
+
+// ============================================================
+// AUTOCOMPLETE — buscador con sugerencias desde /maestras
+// ============================================================
+
+/**
+ * Configura un autocomplete sobre un wrapper .autocomplete-wrap
+ * @param {string} wrapId — id del div.autocomplete-wrap
+ * @param {object} opts
+ *   maestra  — id de la maestra (6=lab, 3=formas, 4=vias, 7=atc)
+ *   minChars — mínimo de caracteres para buscar (default 2)
+ *   preload  — si true, carga todo al inicio con nombre=%
+ *   formatItem — función(item) → HTML de cada opción
+ *   getValue — función(item) → valor a poner en el input al seleccionar
+ */
+function setupAutocomplete(wrapId, opts) {
+  const wrap = document.getElementById(wrapId);
+  const input = wrap.querySelector('input');
+  const list = wrap.querySelector('.ac-list');
+  const minChars = opts.minChars || 2;
+
+  let items = [];        // datos precargados (si preload)
+  let abortCtrl = null;  // para cancelar fetch anterior
+  let activeIdx = -1;    // índice resaltado con teclado
+
+  // ── Precarga (vías de administración: 141 items) ──
+  if (opts.preload) {
+    cimaFetch('/maestras', { maestra: opts.maestra, nombre: '%' })
+      .then(data => { items = data.resultados || []; })
+      .catch(() => {});
+  }
+
+  // ── Búsqueda ──
+  async function search(texto) {
+    if (texto.length < minChars) { close(); return; }
+
+    let results;
+
+    if (opts.preload && items.length > 0) {
+      // Filtrar localmente
+      const t = texto.toLowerCase();
+      results = items.filter(it => {
+        const n = (it.nombre || '').toLowerCase();
+        const c = (it.codigo || '').toLowerCase();
+        return n.includes(t) || c.includes(t);
+      }).slice(0, 30);
+    } else {
+      // Buscar en el servidor
+      if (abortCtrl) abortCtrl.abort();
+      abortCtrl = new AbortController();
+      try {
+        const data = await cimaFetch('/maestras', { maestra: opts.maestra, nombre: texto });
+        results = (data.resultados || []).slice(0, 30);
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        close(); return;
+      }
+    }
+
+    render(results);
+  }
+
+  // ── Renderizar lista ──
+  function render(results) {
+    activeIdx = -1;
+    if (results.length === 0) {
+      list.innerHTML = '<div class="ac-hint">Sin coincidencias</div>';
+      list.classList.add('open');
+      return;
+    }
+
+    list.innerHTML = results.map((it, i) =>
+      `<div class="ac-item" data-idx="${i}">${opts.formatItem(it)}</div>`
+    ).join('');
+
+    list.classList.add('open');
+
+    // Click en item
+    list.querySelectorAll('.ac-item').forEach((el, i) => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // evitar blur
+        input.value = opts.getValue(results[i]);
+        close();
+      });
+    });
+  }
+
+  function close() {
+    list.classList.remove('open');
+    list.innerHTML = '';
+    activeIdx = -1;
+  }
+
+  // ── Eventos del input ──
+  let debounceTimer;
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => search(input.value.trim()), 250);
+  });
+
+  input.addEventListener('focus', () => {
+    if (input.value.trim().length >= minChars) search(input.value.trim());
+  });
+
+  input.addEventListener('blur', () => {
+    // pequeño delay para permitir click en items
+    setTimeout(close, 150);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const itemEls = list.querySelectorAll('.ac-item');
+    if (!list.classList.contains('open') || itemEls.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, itemEls.length - 1);
+      itemEls.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+      itemEls[activeIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      itemEls.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+      itemEls[activeIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      itemEls[activeIdx]?.dispatchEvent(new Event('mousedown'));
+    } else if (e.key === 'Escape') {
+      close();
+    }
+  });
+}
+
+// ── Inicializar los 4 autocompletes ──
+
+// Laboratorio (maestra 6) — solo tiene campo 'nombre'
+setupAutocomplete('acLaboratorio', {
+  maestra: 6,
+  minChars: 2,
+  formatItem: it => it.nombre,
+  getValue: it => it.nombre
+});
+
+// ATC (maestra 7) — tiene 'codigo' y 'nombre'
+setupAutocomplete('acAtc', {
+  maestra: 7,
+  minChars: 2,
+  formatItem: it => `<span class="ac-code">${it.codigo}</span>${it.nombre}`,
+  getValue: it => it.codigo
+});
+
+
+// ============================================================
+// ELEMENTOS DOM
+// ============================================================
+const $ = (id) => document.getElementById(id);
+
+const fPractiv        = $('fPractiv');
+const fNombre         = $('fNombre');
+const fCn             = $('fCn');
+const fLaboratorio    = $('fLaboratorio');
+const fAtc            = $('fAtc');
+const fEstado         = $('fEstado');
+const fComerc         = $('fComerc');
+const fReceta         = $('fReceta');
+const fGenerico       = $('fGenerico');
+const fHuerfano       = $('fHuerfano');
+const fBiosimilar     = $('fBiosimilar');
+const fSust           = $('fSust');
+const fEstupefaciente = $('fEstupefaciente');
+const fPsicotropo     = $('fPsicotropo');
+const fComercializador= $('fComercializador');
+const fForma          = $('fForma');
+const fVia            = $('fVia');
+
+const btnBuscar       = $('btnBuscar');
+const btnClearFilters = $('btnClearFilters');
+const btnAdvanced     = $('btnAdvanced');
+const advancedPanel   = $('advancedPanel');
+const activeFiltersEl = $('activeFilters');
+const loading         = $('loading');
+const errorMsg        = $('errorMsg');
+const resultsContainer= $('resultsContainer');
+const resultsInfo     = $('resultsInfo');
+const medList         = $('medList');
+const pagination      = $('pagination');
+const emptyState      = $('emptyState');
+const detailPanel     = $('detailPanel');
+const detailContent   = $('detailContent');
+const detailBack      = $('detailBack');
+
+const btnExport       = $('btnExport');
+
+let currentPage = 1;
+let hasSearched = false;
+let lastResults = [];  // resultados visibles de la página actual (para exportar)
+
+// ============================================================
+// FILTROS
+// ============================================================
+
+function getServerFilters() {
+  const f = {};
+  if (fPractiv.value.trim())     f.practiv1 = fPractiv.value.trim();
+  if (fNombre.value.trim())      f.nombre = fNombre.value.trim();
+  if (fCn.value.trim())          f.cn = fCn.value.trim();
+  if (fLaboratorio.value.trim()) f.laboratorio = fLaboratorio.value.trim();
+  if (fAtc.value.trim())         f.atc = fAtc.value.trim();
+  if (fEstado.value)             f.estados = fEstado.value;
+  if (fComerc.value)             f.comerc = fComerc.value;
+  if (fReceta.value)             f.receta = fReceta.value;
+  if (fGenerico.value)           f.generico = fGenerico.value;
+  if (fHuerfano.value)           f.huerfano = fHuerfano.value;
+  if (fBiosimilar.value)         f.biosimilar = fBiosimilar.value;
+  if (fSust.value)               f.sust = fSust.value;
+  if (fEstupefaciente.value)     f.estupefaciente = fEstupefaciente.value;
+  if (fPsicotropo.value)         f.psicotropo = fPsicotropo.value;
+  return f;
+}
+
+function getClientFilters() {
+  return {
+    comercializador: fComercializador.value.trim().toLowerCase(),
+    forma: fForma.value.trim().toLowerCase(),
+    via: fVia.value.trim().toLowerCase()
+  };
+}
+
+function applyClientFilters(resultados) {
+  const cf = getClientFilters();
+  if (!cf.comercializador && !cf.forma && !cf.via) return resultados;
+
+  return resultados.filter(med => {
+    if (cf.comercializador) {
+      const val = (med.labcomercializador || '').toLowerCase();
+      if (!val.includes(cf.comercializador)) return false;
+    }
+    if (cf.forma) {
+      const val = (med.formaFarmaceutica?.nombre || '').toLowerCase();
+      if (!val.includes(cf.forma)) return false;
+    }
+    if (cf.via) {
+      const vias = (med.viasAdministracion || []).map(v => v.nombre.toLowerCase()).join(' ');
+      if (!vias.includes(cf.via)) return false;
+    }
+    return true;
+  });
+}
+
+function hasAnyServerFilter() {
+  return Object.keys(getServerFilters()).length > 0;
+}
+
+function hasAnyClientFilter() {
+  const cf = getClientFilters();
+  return !!(cf.comercializador || cf.forma || cf.via);
+}
+
+// ============================================================
+// TAGS DE FILTROS ACTIVOS
+// ============================================================
+function renderActiveFilters() {
+  const tags = [];
+
+  const estadoLabels = { '1': 'Autorizado', '4': 'Suspendido', '3': 'Revocado' };
+  const boolLabels = { '1': 'Sí', '0': 'No' };
+  const sustLabels = { '1': 'Biológicos', '2': 'Margen terap. estrecho', '3': 'Control médico especial', '4': 'Inhaladores', '5': 'MTE con control especial' };
+
+  if (fPractiv.value.trim())       tags.push({ label: `P. Activo: ${fPractiv.value.trim()}`,      clear: () => fPractiv.value = '' });
+  if (fNombre.value.trim())        tags.push({ label: `Nombre: ${fNombre.value.trim()}`,           clear: () => fNombre.value = '' });
+  if (fCn.value.trim())            tags.push({ label: `CN: ${fCn.value.trim()}`,                   clear: () => fCn.value = '' });
+  if (fLaboratorio.value.trim())   tags.push({ label: `Lab: ${fLaboratorio.value.trim()}`,         clear: () => fLaboratorio.value = '' });
+  if (fAtc.value.trim())           tags.push({ label: `ATC: ${fAtc.value.trim()}`,                 clear: () => fAtc.value = '' });
+  if (fEstado.value)               tags.push({ label: `Estado: ${estadoLabels[fEstado.value]}`,    clear: () => fEstado.value = '' });
+  if (fComerc.value)               tags.push({ label: `Comercializado: ${boolLabels[fComerc.value]}`, clear: () => fComerc.value = '' });
+  if (fReceta.value)               tags.push({ label: `Receta: ${boolLabels[fReceta.value]}`,      clear: () => fReceta.value = '' });
+  if (fGenerico.value)             tags.push({ label: `Genérico: ${boolLabels[fGenerico.value]}`,  clear: () => fGenerico.value = '' });
+  if (fHuerfano.value)             tags.push({ label: `Huérfano: ${boolLabels[fHuerfano.value]}`,  clear: () => fHuerfano.value = '' });
+  if (fBiosimilar.value)           tags.push({ label: `Biosimilar: ${boolLabels[fBiosimilar.value]}`, clear: () => fBiosimilar.value = '' });
+  if (fSust.value)                 tags.push({ label: `No sust: ${sustLabels[fSust.value]}`,       clear: () => fSust.value = '' });
+  if (fEstupefaciente.value)       tags.push({ label: `Estupefaciente: Sí`,                        clear: () => fEstupefaciente.value = '' });
+  if (fPsicotropo.value)           tags.push({ label: `Psicótropo: Sí`,                            clear: () => fPsicotropo.value = '' });
+  if (fComercializador.value.trim()) tags.push({ label: `Lab. comerc: ${fComercializador.value.trim()}`, clear: () => fComercializador.value = '' });
+  if (fForma.value.trim())         tags.push({ label: `Forma: ${fForma.value.trim()}`,             clear: () => fForma.value = '' });
+  if (fVia.value.trim())           tags.push({ label: `Vía: ${fVia.value.trim()}`,                 clear: () => fVia.value = '' });
+
+  activeFiltersEl.innerHTML = '';
+  tags.forEach(tag => {
+    const el = document.createElement('span');
+    el.className = 'filter-tag';
+    el.innerHTML = `${tag.label} <span class="remove">&times;</span>`;
+    el.querySelector('.remove').addEventListener('click', (e) => {
+      e.stopPropagation();
+      tag.clear();
+      renderActiveFilters();
+      if (hasSearched) buscar(1);
+    });
+    activeFiltersEl.appendChild(el);
+  });
+}
+
+// ============================================================
+// B&Uacute;SQUEDA
+// ============================================================
+async function buscar(pagina = 1) {
+  const tieneServerFilter = hasAnyServerFilter();
+  const tieneClientFilter = hasAnyClientFilter();
+
+  if (!tieneServerFilter && !tieneClientFilter) {
+    showError('Rellena al menos un filtro para realizar la búsqueda.');
+    return;
+  }
+
+  currentPage = pagina;
+  hasSearched = true;
+
+  showSection('loading');
+  loading.textContent = 'Buscando medicamentos';
+  errorMsg.style.display = 'none';
+  renderActiveFilters();
+
+  try {
+    const params = { pagina: String(pagina), cargaprincipiosactivos: 'true', ...getServerFilters() };
+    const data = await cimaFetch('/medicamentos', params);
+
+    if (!data.resultados || data.resultados.length === 0) {
+      showSection('empty');
+      emptyState.textContent = 'No se encontraron resultados con los filtros indicados.';
+      return;
+    }
+
+    // Aplicar filtros cliente
+    const resultados = applyClientFilters(data.resultados);
+    lastResults = resultados;
+
+    if (resultados.length === 0) {
+      showSection('empty');
+      emptyState.textContent = 'Ningún resultado en esta página coincide con los filtros avanzados.';
+      return;
+    }
+
+    renderList({
+      totalFilas: data.totalFilas,
+      pagina: data.pagina,
+      tamanioPagina: data.tamanioPagina,
+      resultados,
+      totalSinFiltroCliente: data.resultados.length
+    });
+
+    showSection('results');
+  } catch (err) {
+    showError(`No se pudo conectar con CIMA: ${err.message}`);
+  }
+}
+
+function renderList(data) {
+  const total = data.totalFilas || 0;
+  const pag = data.pagina || 1;
+  const tam = data.tamanioPagina || 25;
+  const totalPags = Math.ceil(total / tam);
+
+  let infoText = `${total} resultado${total !== 1 ? 's' : ''}`;
+  if (hasAnyClientFilter() && data.resultados.length !== data.totalSinFiltroCliente) {
+    infoText += ` — ${data.resultados.length} de ${data.totalSinFiltroCliente} en esta página tras filtros avanzados`;
+  }
+  infoText += ` — Página ${pag} de ${totalPags}`;
+  resultsInfo.textContent = infoText;
+
+  medList.innerHTML = data.resultados.map(med => {
+    const estado = med.estado?.aut ? 'Autorizado' : (med.estado?.susp ? 'Suspendido' : (med.estado?.rev ? 'Revocado' : 'No autorizado'));
+    const estadoBadge = med.estado?.aut ? 'badge-green' : (med.estado?.susp ? 'badge-orange' : 'badge-red');
+    const comerc = med.comerc ? 'Comercializado' : 'No comercializado';
+    const comercBadge = med.comerc ? 'badge-green' : 'badge-orange';
+    const lab = med.labtitular || '';
+    const pa = med.principiosActivos
+      ? med.principiosActivos.map(p => `${p.nombre}${p.cantidad ? ' ' + p.cantidad : ''}${p.unidad ? ' ' + p.unidad : ''}`).join(', ')
+      : med.pactivos || '';
+
+    return `
+      <div class="med-card" data-nregistro="${med.nregistro}">
+        <h3>${med.nombre || 'Sin nombre'}</h3>
+        ${pa ? `<div class="meta-pa">Principios activos: ${pa}</div>` : ''}
+        <div class="meta">
+          ${lab ? `<span>${lab}</span>` : ''}
+        </div>
+        <div style="margin-top:0.4rem">
+          <span class="badge ${estadoBadge}">${estado}</span>
+          <span class="badge ${comercBadge}">${comerc}</span>
+          ${med.receta ? '<span class="badge badge-blue">Receta</span>' : ''}
+          ${med.generico ? '<span class="badge badge-blue">Genérico</span>' : ''}
+          ${med.huerfano ? '<span class="badge badge-blue">Huérfano</span>' : ''}
+          ${med.biosimilar ? '<span class="badge badge-blue">Biosimilar</span>' : ''}
+          ${med.nosustituible ? '<span class="badge badge-orange">No sustituible</span>' : ''}
+          ${med.estupefaciente ? '<span class="badge badge-red">Estupefaciente</span>' : ''}
+          ${med.psicotropo ? '<span class="badge badge-red">Psicótropo</span>' : ''}
+          ${med.conduc ? '<span class="badge badge-orange">Afecta conducción</span>' : ''}
+          ${med.triangulo ? '<span class="badge badge-red">&#9650; Triángulo negro</span>' : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Paginación
+  pagination.innerHTML = '';
+  if (totalPags > 1) {
+    if (pag > 1) pagination.innerHTML += `<button class="btn btn-secondary" onclick="buscar(${pag - 1})">Anterior</button>`;
+    pagination.innerHTML += `<span class="btn" style="cursor:default">${pag} / ${totalPags}</span>`;
+    if (pag < totalPags) pagination.innerHTML += `<button class="btn btn-secondary" onclick="buscar(${pag + 1})">Siguiente</button>`;
+  }
+
+  // Click en tarjetas
+  medList.querySelectorAll('.med-card').forEach(card => {
+    card.addEventListener('click', () => verDetalle(card.dataset.nregistro));
+  });
+}
+
+// ============================================================
+// DETALLE
+// ============================================================
+async function verDetalle(nregistro) {
+  showSection('loading');
+
+  try {
+    const med = await cimaFetch('/medicamento', { nregistro });
+    renderDetail(med);
+    showSection('detail');
+  } catch (err) {
+    showError(`No se pudo obtener el detalle: ${err.message}`);
+  }
+}
+
+function renderDetail(med) {
+  const foto = med.fotos && med.fotos.length > 0
+    ? `<img src="${med.fotos[0].url}" alt="Foto" class="foto-med">`
+    : '';
+
+  const estado = med.estado?.aut ? 'Autorizado' : (med.estado?.susp ? 'Suspendido' : (med.estado?.rev ? 'Revocado' : 'No autorizado'));
+
+  let docsHtml = '';
+  if (med.docs && med.docs.length > 0) {
+    docsHtml = '<div class="doc-links">';
+    med.docs.forEach(doc => {
+      const label = doc.tipo === 1 ? 'Ficha Técnica' : doc.tipo === 2 ? 'Prospecto' : `Doc ${doc.tipo}`;
+      if (doc.urlHtml) docsHtml += `<a href="${doc.urlHtml}" target="_blank">${label} (HTML)</a>`;
+      if (doc.url) docsHtml += `<a href="${doc.url}" target="_blank">${label} (PDF)</a>`;
+    });
+    docsHtml += '</div>';
+  }
+
+  const paList = med.principiosActivos
+    ? med.principiosActivos.map(pa => `${pa.nombre} ${pa.cantidad || ''} ${pa.unidad || ''}`).join(', ')
+    : med.pactivos || '-';
+
+  const excList = med.excipientes
+    ? med.excipientes.map(e => e.nombre).join(', ')
+    : '-';
+
+  const atcList = med.atcs
+    ? med.atcs.map(a => `${a.codigo} - ${a.nombre}`).join('<br>')
+    : '-';
+
+  const vias = med.viasAdministracion
+    ? med.viasAdministracion.map(v => v.nombre).join(', ')
+    : '-';
+
+  let presHtml = '';
+  if (med.presentaciones && med.presentaciones.length > 0) {
+    presHtml = `
+      <table class="presentaciones">
+        <thead><tr><th>Código Nacional</th><th>Nombre</th><th>Estado</th><th>Comercializado</th></tr></thead>
+        <tbody>
+          ${med.presentaciones.map(p => `
+            <tr>
+              <td>${p.cn || '-'}</td>
+              <td>${p.nombre || '-'}</td>
+              <td>${p.estado?.aut ? 'Autorizado' : 'No autorizado'}</td>
+              <td>${p.comerc ? 'Sí' : 'No'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  detailContent.innerHTML = `
+    ${foto}
+    <h2>${med.nombre || 'Sin nombre'}</h2>
+
+    <dl class="detail-grid">
+      <dt>N.º Registro</dt><dd>${med.nregistro || '-'}</dd>
+      <dt>Estado</dt><dd>${estado}</dd>
+      <dt>Laboratorio titular</dt><dd>${med.labtitular || '-'}</dd>
+      <dt>Comercializador</dt><dd>${med.labcomercializador || '-'}</dd>
+      <dt>Forma farmacéutica</dt><dd>${med.formaFarmaceutica?.nombre || '-'}</dd>
+      <dt>Dosis</dt><dd>${med.dosis || '-'}</dd>
+      <dt>Vías de administración</dt><dd>${vias}</dd>
+      <dt>Receta</dt><dd>${med.receta ? 'Sí' : 'No'}</dd>
+      <dt>Comercializado</dt><dd>${med.comerc ? 'Sí' : 'No'}</dd>
+      <dt>Genérico</dt><dd>${med.generico ? 'Sí' : 'No'}</dd>
+      <dt>Huérfano</dt><dd>${med.huerfano ? 'Sí' : 'No'}</dd>
+      <dt>Biosimilar</dt><dd>${med.biosimilar ? 'Sí' : 'No'}</dd>
+      <dt>No sustituible</dt><dd>${med.nosustituible ? med.nosustituible.nombre || 'Sí' : 'No'}</dd>
+      <dt>Estupefaciente</dt><dd>${med.estupefaciente ? 'Sí' : 'No'}</dd>
+      <dt>Psicótropo</dt><dd>${med.psicotropo ? 'Sí' : 'No'}</dd>
+      <dt>Afecta conducción</dt><dd>${med.conduc ? 'Sí' : 'No'}</dd>
+      <dt>Triángulo negro</dt><dd>${med.triangulo ? 'Sí' : 'No'}</dd>
+    </dl>
+
+    <div class="detail-section">
+      <h3>Principios activos</h3>
+      <p>${paList}</p>
+    </div>
+
+    <div class="detail-section">
+      <h3>Excipientes de declaración obligatoria</h3>
+      <p>${excList}</p>
+    </div>
+
+    <div class="detail-section">
+      <h3>Clasificación ATC</h3>
+      <p>${atcList}</p>
+    </div>
+
+    ${docsHtml ? `<div class="detail-section"><h3>Documentos</h3>${docsHtml}</div>` : ''}
+
+    ${presHtml ? `<div class="detail-section"><h3>Presentaciones</h3>${presHtml}</div>` : ''}
+  `;
+}
+
+// ============================================================
+// UI helpers
+// ============================================================
+function showSection(which) {
+  loading.style.display = 'none';
+  resultsContainer.style.display = 'none';
+  emptyState.style.display = 'none';
+  detailPanel.classList.remove('active');
+
+  switch (which) {
+    case 'loading': loading.style.display = 'block'; break;
+    case 'results': resultsContainer.style.display = 'block'; break;
+    case 'empty': emptyState.style.display = 'block'; break;
+    case 'detail': detailPanel.classList.add('active'); break;
+  }
+}
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = 'block';
+  showSection('empty');
+  emptyState.textContent = '';
+}
+
+function clearAllFilters() {
+  fPractiv.value = '';
+  fNombre.value = '';
+  fCn.value = '';
+  fLaboratorio.value = '';
+  fAtc.value = '';
+  fEstado.value = '';
+  fComerc.value = '';
+  fReceta.value = '';
+  fGenerico.value = '';
+  fHuerfano.value = '';
+  fBiosimilar.value = '';
+  fSust.value = '';
+  fEstupefaciente.value = '';
+  fPsicotropo.value = '';
+  fComercializador.value = '';
+  fForma.value = '';
+  fVia.value = '';
+  renderActiveFilters();
+}
+
+// ============================================================
+// EXPORTAR A EXCEL
+// ============================================================
+async function exportarExcel() {
+  if (!lastResults || lastResults.length === 0) return;
+
+  // Cambiar estado del botón mientras carga
+  btnExport.disabled = true;
+  btnExport.textContent = 'Preparando...';
+
+  try {
+    // Pedir detalles de cada medicamento en paralelo (para obtener CN y ATC)
+    const detalles = await Promise.all(
+      lastResults.map(med =>
+        cimaFetch('/medicamento', { nregistro: med.nregistro }).catch(() => null)
+      )
+    );
+
+    const rows = lastResults.map((med, i) => {
+      const det = detalles[i]; // detalle completo (puede ser null si falló)
+      const estado = med.estado?.aut ? 'Autorizado' : (med.estado?.susp ? 'Suspendido' : (med.estado?.rev ? 'Revocado' : 'No autorizado'));
+      const pa = med.principiosActivos
+        ? med.principiosActivos.map(p => `${p.nombre}${p.cantidad ? ' ' + p.cantidad : ''}${p.unidad ? ' ' + p.unidad : ''}`).join('; ')
+        : med.pactivos || '';
+      const vias = (med.viasAdministracion || []).map(v => v.nombre).join('; ');
+
+      // CN: primera presentación comercializada, o la primera disponible
+      let cn = '';
+      if (det?.presentaciones?.length) {
+        const pComerc = det.presentaciones.find(p => p.comerc);
+        cn = (pComerc || det.presentaciones[0]).cn || '';
+      }
+
+      // ATC: el de mayor nivel (más detallado)
+      let atcCode = '';
+      if (det?.atcs?.length) {
+        const sorted = [...det.atcs].sort((a, b) => (b.nivel || 0) - (a.nivel || 0));
+        atcCode = `${sorted[0].codigo} - ${sorted[0].nombre}`;
+      }
+
+      return {
+        'Código Nacional': cn,
+        'N.º Registro': med.nregistro || '',
+        'Nombre': med.nombre || '',
+        'Principios activos': pa,
+        'Laboratorio titular': med.labtitular || '',
+        'Comercializador': med.labcomercializador || '',
+        'Estado': estado,
+        'Comercializado': med.comerc ? 'Sí' : 'No',
+        'Receta': med.receta ? 'Sí' : 'No',
+        'Genérico': med.generico ? 'Sí' : 'No',
+        'Huérfano': med.huerfano ? 'Sí' : 'No',
+        'Biosimilar': med.biosimilar ? 'Sí' : 'No',
+        'No sustituible': med.nosustituible ? (med.nosustituible.nombre || 'Sí') : 'No',
+        'Estupefaciente': med.estupefaciente ? 'Sí' : 'No',
+        'Psicótropo': med.psicotropo ? 'Sí' : 'No',
+        'Afecta conducción': med.conduc ? 'Sí' : 'No',
+        'Triángulo negro': med.triangulo ? 'Sí' : 'No',
+        'Forma farmacéutica': med.formaFarmaceutica?.nombre || '',
+        'Vías de administración': vias,
+        'Dosis': med.dosis || '',
+        'ATC': atcCode
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Ajustar anchos de columna
+    ws['!cols'] = [
+      { wch: 14 }, // Código Nacional
+      { wch: 14 }, // N.º Registro
+      { wch: 45 }, // Nombre
+      { wch: 35 }, // Principios activos
+      { wch: 30 }, // Lab titular
+      { wch: 25 }, // Comercializador
+      { wch: 12 }, // Estado
+      { wch: 14 }, // Comercializado
+      { wch: 8 },  // Receta
+      { wch: 9 },  // Genérico
+      { wch: 9 },  // Huérfano
+      { wch: 10 }, // Biosimilar
+      { wch: 14 }, // No sustituible
+      { wch: 14 }, // Estupefaciente
+      { wch: 11 }, // Psicótropo
+      { wch: 16 }, // Afecta conducción
+      { wch: 15 }, // Triángulo negro
+      { wch: 25 }, // Forma farm.
+      { wch: 25 }, // Vías
+      { wch: 20 }, // Dosis
+      { wch: 35 }, // ATC
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Medicamentos');
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `CIMA_medicamentos_${fecha}.xlsx`);
+
+  } catch (err) {
+    showError(`Error al exportar: ${err.message}`);
+  } finally {
+    btnExport.disabled = false;
+    btnExport.innerHTML = '&#128229; Excel';
+  }
+}
+
+// ============================================================
+// EVENTOS
+// ============================================================
+btnBuscar.addEventListener('click', () => buscar(1));
+btnExport.addEventListener('click', exportarExcel);
+
+// Enter en cualquier campo de texto lanza la búsqueda
+[fPractiv, fNombre, fCn, fLaboratorio, fAtc, fComercializador, fForma, fVia].forEach(input => {
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    // Si hay un autocomplete abierto con item seleccionado, no buscar (el AC ya lo gestiona)
+    const acList = input.closest('.autocomplete-wrap')?.querySelector('.ac-list.open .ac-item.active');
+    if (acList) return;
+    buscar(1);
+  });
+});
+
+// Los selects lanzan búsqueda inmediata si ya se ha buscado antes
+[fEstado, fComerc, fReceta, fGenerico, fHuerfano, fBiosimilar, fSust, fEstupefaciente, fPsicotropo].forEach(sel => {
+  sel.addEventListener('change', () => {
+    renderActiveFilters();
+    if (hasSearched) buscar(1);
+  });
+});
+
+btnClearFilters.addEventListener('click', () => {
+  clearAllFilters();
+  hasSearched = false;
+  errorMsg.style.display = 'none';
+  showSection('empty');
+  emptyState.textContent = 'Rellena al menos un filtro y pulsa Buscar para consultar medicamentos.';
+});
+
+btnAdvanced.addEventListener('click', () => {
+  advancedPanel.classList.toggle('open');
+  btnAdvanced.classList.toggle('active');
+  btnAdvanced.innerHTML = advancedPanel.classList.contains('open')
+    ? 'Filtros avanzados &#9650;'
+    : 'Filtros avanzados &#9660;';
+});
+
+detailBack.addEventListener('click', () => {
+  showSection('results');
+});
+
+// ============================================================
+// SERVICE WORKER & PWA
+// ============================================================
+
+// Registro del Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW registrado:', reg.scope))
+      .catch(err => console.warn('SW error:', err));
+  });
+}
+
+// ── Detección offline/online ──
+const offlineBanner = $('offlineBanner');
+
+function updateOnlineStatus() {
+  if (navigator.onLine) {
+    offlineBanner.classList.remove('visible');
+  } else {
+    offlineBanner.classList.add('visible');
+  }
+}
+
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
+// ── Prompt de instalación (Android/Chrome) ──
+let deferredPrompt = null;
+const installBanner = $('installBanner');
+const btnInstall = $('btnInstall');
+const btnDismissInstall = $('btnDismissInstall');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // No mostrar si ya se rechazó en esta sesión
+  if (!sessionStorage.getItem('pwa-install-dismissed')) {
+    installBanner.classList.add('visible');
+  }
+});
+
+btnInstall.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const result = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  installBanner.classList.remove('visible');
+});
+
+btnDismissInstall.addEventListener('click', () => {
+  installBanner.classList.remove('visible');
+  sessionStorage.setItem('pwa-install-dismissed', '1');
+});
+
+// Ocultar banner si ya está instalada
+window.addEventListener('appinstalled', () => {
+  installBanner.classList.remove('visible');
+  deferredPrompt = null;
+});
+</script>
+
+</body>
+</html>
