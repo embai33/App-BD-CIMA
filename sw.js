@@ -3,17 +3,20 @@
 // Estrategia: Network-first con fallback a cache
 // ============================================================
 
-const CACHE_NAME = 'cima-pwa-v2';
+const CACHE_NAME = 'cima-pwa-v3';
 
 // Recursos del shell de la app que se cachean en la instalación
 const SHELL_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './apple-touch-icon.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-192.png',
   './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon-180.png',
+  './icons/apple-touch-icon-152.png',
   'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.mini.min.js'
 ];
 
