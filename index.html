@@ -421,6 +421,66 @@
 
     .detail-section h3 { font-size: 1rem; color: var(--azul); margin-bottom: 0.6rem; }
 
+    /* ── BIFIMED financiación ── */
+    .bifimed-loading {
+      font-size: 0.85rem;
+      color: var(--texto-sec);
+      font-style: italic;
+    }
+
+    .bifimed-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+    }
+
+    .bifimed-table th {
+      background: var(--gris-fondo);
+      text-align: left;
+      padding: 0.5rem 0.65rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--texto-sec);
+      letter-spacing: 0.03em;
+    }
+
+    .bifimed-table td {
+      padding: 0.5rem 0.65rem;
+      border-bottom: 1px solid var(--gris-borde);
+      vertical-align: top;
+    }
+
+    .bifimed-res {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .bifimed-res-si { background: #d5f5e3; color: #1e8449; }
+    .bifimed-res-no { background: #fadbd8; color: #922b21; }
+    .bifimed-res-otro { background: #fdebd0; color: #b9770e; }
+
+    .bifimed-text-block {
+      margin-top: 0.5rem;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .bifimed-text-block strong {
+      display: block;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      color: var(--texto-sec);
+      margin-bottom: 0.2rem;
+    }
+
+    .bifimed-text-block p {
+      margin-bottom: 0.8rem;
+    }
+
     .doc-links a {
       display: inline-block;
       margin-right: 1rem;
@@ -780,10 +840,19 @@
 // CONFIGURACI&Oacute;N
 // ============================================================
 const CIMA_BASE = 'https://cima.aemps.es/cima/rest';
+const BIFIMED_WORKER = 'https://bifimed-proxy.embai3341492.workers.dev';
 
 // ============================================================
 // API
 // ============================================================
+async function fetchBifimed(cn) {
+  const res = await fetch(`${BIFIMED_WORKER}/?cn=${cn}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  return res.json();
+}
+
 async function cimaFetch(endpoint, params = {}) {
   const url = new URL(`${CIMA_BASE}${endpoint}`);
   for (const [k, v] of Object.entries(params)) {
@@ -1223,9 +1292,91 @@ async function verDetalle(nregistro) {
     const med = await cimaFetch('/medicamento', { nregistro });
     renderDetail(med);
     showSection('detail');
+
+    // Consultar BIFIMED de forma asíncrona (no bloquea la carga del detalle)
+    cargarBifimed(med);
   } catch (err) {
     showError(`No se pudo obtener el detalle: ${err.message}`);
   }
+}
+
+async function cargarBifimed(med) {
+  const section = document.getElementById('bifimedSection');
+  const content = document.getElementById('bifimedContent');
+  if (!section || !content) return;
+
+  // Obtener CN de la primera presentación comercializada, o la primera disponible
+  const pres = med.presentaciones || [];
+  const presComerc = pres.find(p => p.comerc);
+  const cn = (presComerc || pres[0])?.cn;
+
+  if (!cn) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  content.innerHTML = '<span class="bifimed-loading">Consultando BIFIMED…</span>';
+
+  try {
+    const data = await fetchBifimed(cn);
+
+    if (data.error) {
+      content.innerHTML = `<span class="bifimed-loading">No se pudo obtener la información de financiación.</span>`;
+      return;
+    }
+
+    if (data.centralizado && data.indicaciones && data.indicaciones.length > 0) {
+      // Medicamento centralizado: tabla de indicaciones
+      content.innerHTML = `
+        <table class="bifimed-table">
+          <thead>
+            <tr>
+              <th>Indicación autorizada</th>
+              <th>Situación expediente</th>
+              <th>Resolución financiación</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.indicaciones.map(ind => `
+              <tr>
+                <td>${ind.indicacion}</td>
+                <td>${ind.situacion}</td>
+                <td><span class="bifimed-res ${resolucionClass(ind.resolucion)}">${ind.resolucion}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } else {
+      // Medicamento no centralizado: texto libre
+      const fin = data.indicacionesFinanciadas || '';
+      const noFin = data.indicacionesNoFinanciadas || '';
+      const general = data.financiado || '';
+
+      if (!fin && !noFin && !general) {
+        content.innerHTML = '<span class="bifimed-loading">Sin información de financiación disponible para este medicamento.</span>';
+        return;
+      }
+
+      let html = '<div class="bifimed-text-block">';
+      html += `<strong>Situación de financiación</strong><p><span class="bifimed-res ${resolucionClass(general)}">${general || '-'}</span></p>`;
+      if (fin) html += `<strong>Indicaciones financiadas</strong><p>${fin}</p>`;
+      if (noFin) html += `<strong>Indicaciones no financiadas</strong><p>${noFin}</p>`;
+      html += '</div>';
+      content.innerHTML = html;
+    }
+  } catch (err) {
+    content.innerHTML = '<span class="bifimed-loading">No se pudo conectar con BIFIMED.</span>';
+  }
+}
+
+function resolucionClass(texto) {
+  if (!texto) return 'bifimed-res-otro';
+  const t = texto.toLowerCase();
+  if (t.includes('no financiad') || t.includes('excluido') || t.includes('excluida')) return 'bifimed-res-no';
+  if (t.includes('sí') || t.includes('financiad')) return 'bifimed-res-si';
+  return 'bifimed-res-otro';
 }
 
 function renderDetail(med) {
@@ -1323,6 +1474,11 @@ function renderDetail(med) {
     ${docsHtml ? `<div class="detail-section"><h3>Documentos</h3>${docsHtml}</div>` : ''}
 
     ${presHtml ? `<div class="detail-section"><h3>Presentaciones</h3>${presHtml}</div>` : ''}
+
+    <div class="detail-section" id="bifimedSection" style="display:none">
+      <h3>Financiación SNS <span style="font-weight:400;font-size:0.8rem;color:var(--texto-sec)">(BIFIMED)</span></h3>
+      <div id="bifimedContent"><span class="bifimed-loading">Consultando BIFIMED…</span></div>
+    </div>
   `;
 }
 
