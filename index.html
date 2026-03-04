@@ -1224,12 +1224,14 @@ function applyClientFilters(resultados) {
       if (!val.includes(cf.comercializador)) return false;
     }
     if (cf.forma) {
-      const val = (med.formaFarmaceutica?.nombre || '').toLowerCase();
-      if (!val.includes(cf.forma)) return false;
+      const formaVal = (med.formaFarmaceutica?.nombre || '').toLowerCase();
+      const nombreVal = (med.nombre || '').toLowerCase();
+      if (!formaVal.includes(cf.forma) && !nombreVal.includes(cf.forma)) return false;
     }
     if (cf.via) {
       const vias = (med.viasAdministracion || []).map(v => v.nombre.toLowerCase()).join(' ');
-      if (!vias.includes(cf.via)) return false;
+      const nombreVal = (med.nombre || '').toLowerCase();
+      if (!vias.includes(cf.via) && !nombreVal.includes(cf.via)) return false;
     }
     if (cf.generico) {
       const esGenerico = !!med.generico;
