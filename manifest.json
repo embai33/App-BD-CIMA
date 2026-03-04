@@ -1,6 +1,6 @@
 {
-  "name": "CIMA Medicamentos",
-  "short_name": "CIMA",
+  "name": "BD Medicamentos",
+  "short_name": "BD Mdtos",
   "description": "Consulta de medicamentos autorizados en España — Datos de la AEMPS",
   "start_url": "./index.html",
   "scope": "./",
