@@ -456,7 +456,7 @@
       padding: 0.15rem 0.5rem;
       border-radius: 3px;
       font-size: 0.78rem;
-      font-weight: 600;
+      font-weight: 400;
     }
 
     .bifimed-res-si { background: #d5f5e3; color: #1e8449; }
@@ -620,6 +620,105 @@
       font-size: 1.2rem;
       padding: 0.2rem 0.5rem;
     }
+
+    /* ── Modal de información ── */
+    .info-btn {
+      background: none;
+      border: 1.5px solid rgba(255,255,255,0.5);
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+      flex-shrink: 0;
+      transition: border-color 0.2s;
+    }
+
+    .info-btn:hover { border-color: white; }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-box {
+      background: var(--blanco);
+      border-radius: var(--radius);
+      max-width: 440px;
+      width: 100%;
+      padding: 1.5rem;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+      position: relative;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 0.6rem;
+      right: 0.8rem;
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      color: var(--texto-sec);
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-close:hover { color: var(--texto); }
+
+    .modal-box h3 {
+      font-size: 1.1rem;
+      color: var(--azul);
+      margin-bottom: 0.8rem;
+    }
+
+    .modal-box p {
+      font-size: 0.88rem;
+      color: var(--texto);
+      line-height: 1.6;
+      margin-bottom: 0.6rem;
+    }
+
+    .modal-box a { color: var(--azul-claro); }
+
+    .modal-footer {
+      margin-top: 1.2rem;
+      padding-top: 0.8rem;
+      border-top: 1px solid var(--gris-borde);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--texto-sec);
+    }
+
+    .modal-footer img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .modal-footer a {
+      font-weight: 600;
+      color: var(--azul);
+      text-decoration: none;
+    }
+
+    .modal-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -637,7 +736,24 @@
 <header>
   <h1>CIMA Medicamentos</h1>
   <span>Consulta de medicamentos &middot; Datos de la AEMPS</span>
+  <button class="info-btn" id="btnInfo" title="Información">i</button>
 </header>
+
+<!-- Modal de información -->
+<div class="modal-overlay" id="infoModal">
+  <div class="modal-box">
+    <button class="modal-close" id="modalClose">&times;</button>
+    <h3>Acerca de esta aplicaci&oacute;n</h3>
+    <p>Esta aplicaci&oacute;n consulta datos de dos fuentes p&uacute;blicas del sistema sanitario espa&ntilde;ol:</p>
+    <p><strong><a href="https://cima.aemps.es" target="_blank" rel="noopener">CIMA</a></strong> (AEMPS) &mdash; informaci&oacute;n sobre medicamentos autorizados en Espa&ntilde;a.</p>
+    <p><strong><a href="https://www.sanidad.gob.es/profesionales/medicamentos.do" target="_blank" rel="noopener">BIFIMED</a></strong> (Ministerio de Sanidad) &mdash; situaci&oacute;n de financiaci&oacute;n de los medicamentos en el SNS.</p>
+    <div class="modal-footer">
+      <span>Aplicaci&oacute;n creada por</span>
+      <a href="https://www.linkedin.com/in/emilio-monte-boquet" target="_blank" rel="noopener">EMB</a>
+      <img src="icons/EMB.png" alt="EMB">
+    </div>
+  </div>
+</div>
 
 <div class="container">
 
@@ -1077,9 +1193,10 @@ function getServerFilters() {
   if (fEstado.value)             f.estados = fEstado.value;
   if (fComerc.value)             f.comerc = fComerc.value;
   if (fReceta.value)             f.receta = fReceta.value;
-  if (fGenerico.value)           f.generico = fGenerico.value;
-  if (fHuerfano.value)           f.huerfano = fHuerfano.value;
-  if (fBiosimilar.value)         f.biosimilar = fBiosimilar.value;
+  // generico: el parámetro de la API no filtra correctamente (actúa como receta)
+  // huerfano: el valor "0" es ignorado por la API
+  // Ambos se aplican como filtros de cliente junto con biosimilar para mayor fiabilidad
+  if (fBiosimilar.value === '1') f.biosimilar = fBiosimilar.value;
   if (fSust.value)               f.sust = fSust.value;
   if (fEstupefaciente.value)     f.estupefaciente = fEstupefaciente.value;
   if (fPsicotropo.value)         f.psicotropo = fPsicotropo.value;
@@ -1090,13 +1207,16 @@ function getClientFilters() {
   return {
     comercializador: fComercializador.value.trim().toLowerCase(),
     forma: fForma.value.trim().toLowerCase(),
-    via: fVia.value.trim().toLowerCase()
+    via: fVia.value.trim().toLowerCase(),
+    generico: fGenerico.value,
+    huerfano: fHuerfano.value,
+    biosimilarNo: fBiosimilar.value === '0' ? true : false
   };
 }
 
 function applyClientFilters(resultados) {
   const cf = getClientFilters();
-  if (!cf.comercializador && !cf.forma && !cf.via) return resultados;
+  if (!cf.comercializador && !cf.forma && !cf.via && !cf.generico && !cf.huerfano && !cf.biosimilarNo) return resultados;
 
   return resultados.filter(med => {
     if (cf.comercializador) {
@@ -1111,6 +1231,19 @@ function applyClientFilters(resultados) {
       const vias = (med.viasAdministracion || []).map(v => v.nombre.toLowerCase()).join(' ');
       if (!vias.includes(cf.via)) return false;
     }
+    if (cf.generico) {
+      const esGenerico = !!med.generico;
+      if (cf.generico === '1' && !esGenerico) return false;
+      if (cf.generico === '0' && esGenerico) return false;
+    }
+    if (cf.huerfano) {
+      const esHuerfano = !!med.huerfano;
+      if (cf.huerfano === '1' && !esHuerfano) return false;
+      if (cf.huerfano === '0' && esHuerfano) return false;
+    }
+    if (cf.biosimilarNo) {
+      if (med.biosimilar) return false;
+    }
     return true;
   });
 }
@@ -1121,7 +1254,7 @@ function hasAnyServerFilter() {
 
 function hasAnyClientFilter() {
   const cf = getClientFilters();
-  return !!(cf.comercializador || cf.forma || cf.via);
+  return !!(cf.comercializador || cf.forma || cf.via || cf.generico || cf.huerfano || cf.biosimilarNo);
 }
 
 // ============================================================
@@ -1676,6 +1809,14 @@ btnAdvanced.addEventListener('click', () => {
 
 detailBack.addEventListener('click', () => {
   showSection('results');
+});
+
+// ── Modal de información ──
+const infoModal = $('infoModal');
+$('btnInfo').addEventListener('click', () => infoModal.classList.add('open'));
+$('modalClose').addEventListener('click', () => infoModal.classList.remove('open'));
+infoModal.addEventListener('click', (e) => {
+  if (e.target === infoModal) infoModal.classList.remove('open');
 });
 
 // ============================================================
