@@ -1199,8 +1199,10 @@ function getServerFilters() {
   // Ambos se aplican como filtros de cliente junto con biosimilar para mayor fiabilidad
   if (fBiosimilar.value === '1') f.biosimilar = fBiosimilar.value;
   if (fSust.value)               f.sust = fSust.value;
-  if (fEstupefaciente.value)     f.estupefaciente = fEstupefaciente.value;
-  if (fPsicotropo.value)         f.psicotropo = fPsicotropo.value;
+  // estupefaciente/psicotropo: solo "1" funciona en servidor; "0" es ignorado por la API
+  // y no hay campo en los resultados de búsqueda para filtrar en cliente
+  if (fEstupefaciente.value === '1') f.estupefaciente = '1';
+  if (fPsicotropo.value === '1')     f.psicotropo = '1';
   return f;
 }
 
@@ -1394,9 +1396,9 @@ function renderList(data) {
           ${med.generico ? '<span class="badge badge-blue">Genérico</span>' : ''}
           ${med.huerfano ? '<span class="badge badge-blue">Huérfano</span>' : ''}
           ${med.biosimilar ? '<span class="badge badge-blue">Biosimilar</span>' : ''}
-          ${med.nosustituible ? '<span class="badge badge-orange">No sustituible</span>' : ''}
-          ${med.estupefaciente ? '<span class="badge badge-red">Estupefaciente</span>' : ''}
-          ${med.psicotropo ? '<span class="badge badge-red">Psicótropo</span>' : ''}
+          ${med.nosustituible?.id ? '<span class="badge badge-orange">No sustituible</span>' : ''}
+          ${med.principiosActivos?.some(pa => pa.listaEstupefacientes) ? '<span class="badge badge-red">Estupefaciente</span>' : ''}
+          ${med.principiosActivos?.some(pa => pa.listaPsicotropos) ? '<span class="badge badge-red">Psicótropo</span>' : ''}
           ${med.conduc ? '<span class="badge badge-orange">Afecta conducción</span>' : ''}
           ${med.triangulo ? '<span class="badge badge-red">&#9650; Triángulo negro</span>' : ''}
         </div>
@@ -1585,9 +1587,9 @@ function renderDetail(med) {
       <dt>Genérico</dt><dd>${med.generico ? 'Sí' : 'No'}</dd>
       <dt>Huérfano</dt><dd>${med.huerfano ? 'Sí' : 'No'}</dd>
       <dt>Biosimilar</dt><dd>${med.biosimilar ? 'Sí' : 'No'}</dd>
-      <dt>No sustituible</dt><dd>${med.nosustituible ? med.nosustituible.nombre || 'Sí' : 'No'}</dd>
-      <dt>Estupefaciente</dt><dd>${med.estupefaciente ? 'Sí' : 'No'}</dd>
-      <dt>Psicótropo</dt><dd>${med.psicotropo ? 'Sí' : 'No'}</dd>
+      <dt>No sustituible</dt><dd>${med.nosustituible?.id ? med.nosustituible.nombre || 'Sí' : 'No'}</dd>
+      <dt>Estupefaciente</dt><dd>${med.principiosActivos?.some(pa => pa.listaEstupefacientes) ? 'Sí' : 'No'}</dd>
+      <dt>Psicótropo</dt><dd>${med.principiosActivos?.some(pa => pa.listaPsicotropos) ? 'Sí' : 'No'}</dd>
       <dt>Afecta conducción</dt><dd>${med.conduc ? 'Sí' : 'No'}</dd>
       <dt>Triángulo negro</dt><dd>${med.triangulo ? 'Sí' : 'No'}</dd>
     </dl>
@@ -1674,14 +1676,58 @@ async function exportarExcel() {
   btnExport.textContent = 'Preparando...';
 
   try {
-    // Pedir detalles de cada medicamento en paralelo (para obtener CN y ATC)
-    const detalles = await Promise.all(
-      lastResults.map(med =>
-        cimaFetch('/medicamento', { nregistro: med.nregistro }).catch(() => null)
-      )
-    );
+    // 1. Recuperar TODOS los resultados (no solo la página actual)
+    const serverFilters = getServerFilters();
+    const PAGE_SIZE = 400; // máximo que permite la API
 
-    const rows = lastResults.map((med, i) => {
+    // Primera petición para saber el total
+    const first = await cimaFetch('/medicamentos', { pagina: '1', pagesize: String(PAGE_SIZE), cargaprincipiosactivos: 'true', ...serverFilters });
+    let allMeds = first.resultados || [];
+    const totalFilas = first.totalFilas || 0;
+    const totalPags = Math.ceil(totalFilas / PAGE_SIZE);
+
+    // Pedir el resto de páginas
+    if (totalPags > 1) {
+      btnExport.textContent = `Descargando 1/${totalPags}...`;
+      const remaining = [];
+      for (let p = 2; p <= totalPags; p++) {
+        remaining.push(
+          cimaFetch('/medicamentos', { pagina: String(p), pagesize: String(PAGE_SIZE), cargaprincipiosactivos: 'true', ...serverFilters })
+            .then(d => {
+              btnExport.textContent = `Descargando ${Math.min(p, totalPags)}/${totalPags}...`;
+              return d.resultados || [];
+            })
+        );
+      }
+      const pages = await Promise.all(remaining);
+      pages.forEach(r => allMeds = allMeds.concat(r));
+    }
+
+    // Aplicar filtros de cliente
+    allMeds = applyClientFilters(allMeds);
+
+    if (allMeds.length === 0) {
+      showError('No hay resultados para exportar tras aplicar los filtros.');
+      return;
+    }
+
+    btnExport.textContent = `Obteniendo detalles (0/${allMeds.length})...`;
+
+    // 2. Pedir detalles en lotes para no saturar la API
+    const BATCH = 20;
+    const detalles = new Array(allMeds.length).fill(null);
+    for (let i = 0; i < allMeds.length; i += BATCH) {
+      const batch = allMeds.slice(i, i + BATCH);
+      const results = await Promise.all(
+        batch.map(med =>
+          cimaFetch('/medicamento', { nregistro: med.nregistro }).catch(() => null)
+        )
+      );
+      results.forEach((d, j) => { detalles[i + j] = d; });
+      btnExport.textContent = `Obteniendo detalles (${Math.min(i + BATCH, allMeds.length)}/${allMeds.length})...`;
+    }
+
+    const rows = allMeds.map((med, i) => {
       const det = detalles[i]; // detalle completo (puede ser null si falló)
       const estado = med.estado?.aut ? 'Autorizado' : (med.estado?.susp ? 'Suspendido' : (med.estado?.rev ? 'Revocado' : 'No autorizado'));
       const pa = med.principiosActivos
@@ -1716,9 +1762,9 @@ async function exportarExcel() {
         'Genérico': med.generico ? 'Sí' : 'No',
         'Huérfano': med.huerfano ? 'Sí' : 'No',
         'Biosimilar': med.biosimilar ? 'Sí' : 'No',
-        'No sustituible': med.nosustituible ? (med.nosustituible.nombre || 'Sí') : 'No',
-        'Estupefaciente': med.estupefaciente ? 'Sí' : 'No',
-        'Psicótropo': med.psicotropo ? 'Sí' : 'No',
+        'No sustituible': med.nosustituible?.id ? (med.nosustituible.nombre || 'Sí') : 'No',
+        'Estupefaciente': med.principiosActivos?.some(pa => pa.listaEstupefacientes) ? 'Sí' : 'No',
+        'Psicótropo': med.principiosActivos?.some(pa => pa.listaPsicotropos) ? 'Sí' : 'No',
         'Afecta conducción': med.conduc ? 'Sí' : 'No',
         'Triángulo negro': med.triangulo ? 'Sí' : 'No',
         'Forma farmacéutica': med.formaFarmaceutica?.nombre || '',
