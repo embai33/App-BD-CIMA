@@ -61,6 +61,15 @@ function parseBifimed(html, cn) {
 
   const financiado = fields['Situación de financiación'] || '';
 
+  // Condiciones de financiación — comunes a centralizados y no centralizados,
+  // aparecen siempre antes del detalle de indicaciones
+  const condiciones = {
+    condicionesPrescripcion: (fields['Condiciones prescripción y dispensación'] || '').replace(/;\s*$/, ''),
+    condicionesRestringidas: (fields['Condiciones financiación restringidas'] || '').replace(/;\s*$/, ''),
+    condicionesEspeciales: (fields['Condiciones especiales de financiación'] || '').replace(/;\s*$/, ''),
+    informePublico: fields['Informe público sobre la decisión de financiación'] || '',
+  };
+
   // ¿Tiene tabla de indicaciones autorizadas? (procedimiento centralizado)
   const idxIndicaciones = html.indexOf('Indicaciones autorizadas');
 
@@ -72,6 +81,7 @@ function parseBifimed(html, cn) {
       cn,
       financiado,
       centralizado: true,
+      ...condiciones,
       indicaciones,
     };
   }
@@ -81,6 +91,7 @@ function parseBifimed(html, cn) {
     cn,
     financiado,
     centralizado: false,
+    ...condiciones,
     indicacionesFinanciadas: fields['Indicaciones financiadas'] || '',
     indicacionesNoFinanciadas: fields['Indicaciones no financiadas'] || '',
   };
@@ -125,7 +136,7 @@ function parseIndicacionesTable(html, startIdx) {
 
 // ── Utilidades ──
 function stripHtml(str) {
-  return str.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+  return str.replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ');
 }
 
 function jsonResponse(data, status = 200, extraHeaders = {}) {
