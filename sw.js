@@ -3,7 +3,7 @@
 // Estrategia: Network-first con fallback a cache
 // ============================================================
 
-const CACHE_NAME = 'cima-pwa-v3';
+const CACHE_NAME = 'cima-pwa-v4';
 
 // Recursos del shell de la app que se cachean en la instalación
 const SHELL_ASSETS = [
@@ -44,8 +44,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Peticiones a la API de CIMA: siempre red primero, sin cachear
-  if (url.hostname === 'cima.aemps.es') {
+  // Peticiones a la API de CIMA o al proxy de BIFIMED: siempre red primero, sin cachear
+  if (url.hostname === 'cima.aemps.es' || url.hostname === 'bifimed-proxy.embai3341492.workers.dev') {
     event.respondWith(
       fetch(event.request).catch(() =>
         new Response(JSON.stringify({ error: 'Sin conexión' }), {
