@@ -1930,8 +1930,20 @@ infoModal.addEventListener('click', (e) => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('SW registrado:', reg.scope))
+      .then(reg => {
+        console.log('SW registrado:', reg.scope);
+        reg.update(); // forzar comprobación de nueva versión al cargar
+      })
       .catch(err => console.warn('SW error:', err));
+  });
+
+  // Cuando un SW nuevo toma el control (tras activarse), recargar una vez
+  // para que la página cargue los assets nuevos en vez de quedarse con los antiguos
+  let swRefrescado = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swRefrescado) return;
+    swRefrescado = true;
+    window.location.reload();
   });
 }
 
