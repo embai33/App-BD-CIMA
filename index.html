@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+  <!-- Content Security Policy: restringe orígenes de scripts, conexiones e imágenes.
+       'unsafe-inline' es necesario porque la app usa <script> y manejadores inline;
+       aun así, connect-src/script-src limitan a los orígenes oficiales usados. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.sheetjs.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://cima.aemps.es https://bifimed-proxy.embai3341492.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
+
   <title>BD Medicamentos - Consulta de Medicamentos</title>
 
   <!-- PWA -->
@@ -1569,9 +1575,16 @@ function resolucionClass(texto) {
   return 'bifimed-res-otro';
 }
 
+// Devuelve la URL solo si usa un esquema seguro (http/https); si no, cadena vacía.
+// Evita inyección de esquemas peligrosos (javascript:, data:...) en href/src.
+function safeUrl(url) {
+  return /^https?:\/\//i.test(url || '') ? url : '';
+}
+
 function renderDetail(med) {
-  const foto = med.fotos && med.fotos.length > 0
-    ? `<img src="${med.fotos[0].url}" alt="Foto" class="foto-med">`
+  const fotoUrl = med.fotos && med.fotos.length > 0 ? safeUrl(med.fotos[0].url) : '';
+  const foto = fotoUrl
+    ? `<img src="${fotoUrl}" alt="Foto" class="foto-med">`
     : '';
 
   const estado = med.estado?.aut ? 'Autorizado' : (med.estado?.susp ? 'Suspendido' : (med.estado?.rev ? 'Revocado' : 'No autorizado'));
@@ -1581,8 +1594,10 @@ function renderDetail(med) {
     docsHtml = '<div class="doc-links">';
     med.docs.forEach(doc => {
       const label = doc.tipo === 1 ? 'Ficha Técnica' : doc.tipo === 2 ? 'Prospecto' : `Doc ${doc.tipo}`;
-      if (doc.urlHtml) docsHtml += `<a href="${doc.urlHtml}" target="_blank">${label} (HTML)</a>`;
-      if (doc.url) docsHtml += `<a href="${doc.url}" target="_blank">${label} (PDF)</a>`;
+      const urlHtml = safeUrl(doc.urlHtml);
+      const url = safeUrl(doc.url);
+      if (urlHtml) docsHtml += `<a href="${urlHtml}" target="_blank" rel="noopener">${label} (HTML)</a>`;
+      if (url) docsHtml += `<a href="${url}" target="_blank" rel="noopener">${label} (PDF)</a>`;
     });
     docsHtml += '</div>';
   }

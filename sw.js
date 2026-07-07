@@ -3,7 +3,7 @@
 // Estrategia: Network-first con fallback a cache
 // ============================================================
 
-const CACHE_NAME = 'cima-pwa-v4';
+const CACHE_NAME = 'cima-pwa-v5';
 
 // Recursos del shell de la app que se cachean en la instalación
 const SHELL_ASSETS = [
